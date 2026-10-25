@@ -1,6 +1,6 @@
 import React from 'react';
 import { StorageTab } from '../types';
-import { Database, FolderTree, Layers, Gauge, Sparkles, RefreshCw, ShieldCheck, ShieldAlert } from 'lucide-react';
+import { Database, FolderTree, Layers, Gauge, Sparkles, RefreshCw, ShieldCheck, ShieldAlert, HardDrive, Lock, Search } from 'lucide-react';
 import { QuotaEstimate } from '../quota/types';
 
 interface HeaderProps {
@@ -9,10 +9,13 @@ interface HeaderProps {
   quotaEstimate: QuotaEstimate | null;
   onRefreshAll: () => void;
   onSeedPlayground: () => void;
+  onOpenCommandPalette: () => void;
   isSeeding: boolean;
   dbCount: number;
   opfsCount: number;
   cacheCount: number;
+  webStorageCount: number;
+  locksCount: number;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -21,10 +24,13 @@ export const Header: React.FC<HeaderProps> = ({
   quotaEstimate,
   onRefreshAll,
   onSeedPlayground,
+  onOpenCommandPalette,
   isSeeding,
   dbCount,
   opfsCount,
   cacheCount,
+  webStorageCount,
+  locksCount,
 }) => {
   const origin = typeof window !== 'undefined' ? window.location.origin : 'localhost';
 
@@ -40,7 +46,7 @@ export const Header: React.FC<HeaderProps> = ({
             <div className="flex items-center gap-2">
               <span className="font-bold text-slate-100 tracking-tight text-base">StorageLens</span>
               <span className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">
-                v1.0
+                v1.2
               </span>
             </div>
             <div className="text-xs text-slate-400 flex items-center gap-1.5 font-mono">
@@ -50,9 +56,21 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
 
+        {/* Command Palette Trigger Pill */}
+        <button
+          onClick={onOpenCommandPalette}
+          className="hidden lg:flex items-center gap-2 px-2.5 py-1 rounded-md bg-slate-900 border border-slate-800 hover:border-slate-700 text-xs text-slate-400 hover:text-slate-200 transition-colors"
+        >
+          <Search className="w-3.5 h-3.5" />
+          <span>Quick Find...</span>
+          <kbd className="px-1.5 py-0.2 bg-slate-800 border border-slate-700 rounded text-[10px] text-slate-400 font-mono">
+            ⌘K
+          </kbd>
+        </button>
+
         {/* Quota & Persistence quick telemetry */}
         {quotaEstimate && (
-          <div className="hidden xl:flex items-center gap-2 ml-4 px-2.5 py-1 rounded-md bg-slate-900 border border-slate-800 text-xs text-slate-300">
+          <div className="hidden xl:flex items-center gap-2 ml-2 px-2.5 py-1 rounded-md bg-slate-900 border border-slate-800 text-xs text-slate-300">
             <Gauge className="w-3.5 h-3.5 text-blue-400" />
             <span>
               {quotaEstimate.usageFormatted} / {quotaEstimate.quotaFormatted}
@@ -83,7 +101,7 @@ export const Header: React.FC<HeaderProps> = ({
       <nav className="flex items-center gap-1 bg-slate-900/80 p-1 rounded-lg border border-slate-800 overflow-x-auto text-xs font-medium">
         <button
           onClick={() => onSelectTab('indexeddb')}
-          className={`flex items-center gap-2 px-3 py-1.5 rounded-md transition-all whitespace-nowrap ${
+          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md transition-all whitespace-nowrap ${
             activeTab === 'indexeddb'
               ? 'bg-blue-600 text-white shadow-sm'
               : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
@@ -102,14 +120,14 @@ export const Header: React.FC<HeaderProps> = ({
 
         <button
           onClick={() => onSelectTab('opfs')}
-          className={`flex items-center gap-2 px-3 py-1.5 rounded-md transition-all whitespace-nowrap ${
+          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md transition-all whitespace-nowrap ${
             activeTab === 'opfs'
               ? 'bg-blue-600 text-white shadow-sm'
               : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
           }`}
         >
           <FolderTree className="w-3.5 h-3.5" />
-          <span>OPFS Sandbox</span>
+          <span>OPFS</span>
           <span
             className={`text-[10px] px-1.5 py-0.2 rounded-full ${
               activeTab === 'opfs' ? 'bg-blue-700 text-white' : 'bg-slate-800 text-slate-400'
@@ -121,7 +139,7 @@ export const Header: React.FC<HeaderProps> = ({
 
         <button
           onClick={() => onSelectTab('cache')}
-          className={`flex items-center gap-2 px-3 py-1.5 rounded-md transition-all whitespace-nowrap ${
+          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md transition-all whitespace-nowrap ${
             activeTab === 'cache'
               ? 'bg-blue-600 text-white shadow-sm'
               : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
@@ -139,15 +157,55 @@ export const Header: React.FC<HeaderProps> = ({
         </button>
 
         <button
+          onClick={() => onSelectTab('webstorage')}
+          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md transition-all whitespace-nowrap ${
+            activeTab === 'webstorage'
+              ? 'bg-blue-600 text-white shadow-sm'
+              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+          }`}
+        >
+          <HardDrive className="w-3.5 h-3.5" />
+          <span>WebStorage</span>
+          <span
+            className={`text-[10px] px-1.5 py-0.2 rounded-full ${
+              activeTab === 'webstorage' ? 'bg-blue-700 text-white' : 'bg-slate-800 text-slate-400'
+            }`}
+          >
+            {webStorageCount}
+          </span>
+        </button>
+
+        <button
           onClick={() => onSelectTab('quota')}
-          className={`flex items-center gap-2 px-3 py-1.5 rounded-md transition-all whitespace-nowrap ${
+          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md transition-all whitespace-nowrap ${
             activeTab === 'quota'
               ? 'bg-blue-600 text-white shadow-sm'
               : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
           }`}
         >
           <Gauge className="w-3.5 h-3.5" />
-          <span>Quota & Stress</span>
+          <span>Quota</span>
+        </button>
+
+        <button
+          onClick={() => onSelectTab('locks')}
+          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md transition-all whitespace-nowrap ${
+            activeTab === 'locks'
+              ? 'bg-blue-600 text-white shadow-sm'
+              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+          }`}
+        >
+          <Lock className="w-3.5 h-3.5" />
+          <span>Web Locks</span>
+          {locksCount > 0 && (
+            <span
+              className={`text-[10px] px-1.5 py-0.2 rounded-full ${
+                activeTab === 'locks' ? 'bg-blue-700 text-white' : 'bg-slate-800 text-amber-400'
+              }`}
+            >
+              {locksCount}
+            </span>
+          )}
         </button>
       </nav>
 

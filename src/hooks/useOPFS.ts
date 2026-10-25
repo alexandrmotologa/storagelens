@@ -27,6 +27,7 @@ export function useOPFS() {
 
   const [sqliteHeader, setSqliteHeader] = useState<SqliteHeader | null>(null);
   const [sqliteSchemas, setSqliteSchemas] = useState<SqliteSchemaItem[]>([]);
+  const [rawBuffer, setRawBuffer] = useState<Uint8Array | null>(null);
 
   // 1. Refresh tree
   const refreshTree = useCallback(async () => {
@@ -62,7 +63,7 @@ export function useOPFS() {
       const hexData = generateHexDumpPage(buffer, totalSize, offset, hexPageSize);
       setHexPage(hexData);
 
-      // Check for SQLite database (first 4KB is enough for header and schema)
+      // Check for SQLite database (first 8KB is enough for header and schema)
       const headBuffer = await readOpfsBuffer(filePath, 0, Math.min(8192, totalSize));
       if (isSqliteDatabase(headBuffer)) {
         const header = parseSqliteHeader(headBuffer);
@@ -70,9 +71,18 @@ export function useOPFS() {
         setSqliteHeader(header);
         setSqliteSchemas(schemas);
         setFileText(null);
+
+        // Read full DB buffer for SQL query execution if reasonable size (< 50MB)
+        if (totalSize < 50 * 1024 * 1024) {
+          const fullBuf = await readOpfsBuffer(filePath, 0, totalSize);
+          setRawBuffer(fullBuf);
+        } else {
+          setRawBuffer(headBuffer);
+        }
       } else {
         setSqliteHeader(null);
         setSqliteSchemas([]);
+        setRawBuffer(null);
 
         // Try reading as text if smaller than 500KB
         if (totalSize < 512 * 1024) {
@@ -160,11 +170,15 @@ export function useOPFS() {
     hexOffset,
     sqliteHeader,
     sqliteSchemas,
+    rawBuffer,
     refreshTree,
     selectNode,
     loadFilePreview,
     nextHexPage,
     prevHexPage,
+    jumpToOffset: (offset: number) => {
+      if (selectedNode) loadFilePreview(selectedNode.path, offset);
+    },
     downloadSelectedFile,
     removeEntry,
     makeDirectory,

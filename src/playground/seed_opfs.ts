@@ -1,47 +1,40 @@
 import { isOpfsSupported, createOpfsDirectory, writeOpfsFile } from '../opfs/file_tree';
+import { createRealSqliteDatabase } from '../opfs/sqlite_runner';
 
 /**
- * Creates a synthetic SQLite 3 binary file buffer with standard headers and table schema.
+ * Creates a valid SQLite 3 database buffer with standard headers, tables, and rows.
  */
-function createSyntheticSqliteBuffer(): Uint8Array {
-  const pageSize = 4096;
-  const buffer = new Uint8Array(pageSize);
+async function generateSampleSqliteBuffer(): Promise<Uint8Array> {
+  const statements = [
+    'CREATE TABLE telemetry_metrics (id INTEGER PRIMARY KEY, metric_name TEXT NOT NULL, value REAL, recorded_at TEXT);',
+    "INSERT INTO telemetry_metrics VALUES (1, 'opfs_read_throughput_mb_s', 48.5, '2026-10-25T14:10:00Z');",
+    "INSERT INTO telemetry_metrics VALUES (2, 'sqlite_page_cache_hits', 1420.0, '2026-10-25T14:15:00Z');",
+    "INSERT INTO telemetry_metrics VALUES (3, 'indexeddb_cursor_latency_ms', 1.85, '2026-10-25T14:20:00Z');",
+    "INSERT INTO telemetry_metrics VALUES (4, 'cache_storage_hit_ratio', 0.94, '2026-10-25T14:25:00Z');",
+    "INSERT INTO telemetry_metrics VALUES (5, 'storage_quota_headroom_gb', 119.8, '2026-10-25T14:30:00Z');",
+    'CREATE TABLE offline_sync_queue (op_id TEXT PRIMARY KEY, entity TEXT, action TEXT, payload JSON, status TEXT);',
+    "INSERT INTO offline_sync_queue VALUES ('op_001', 'customer', 'UPDATE', '{\"id\":\"cust_01\",\"plan\":\"enterprise\"}', 'pending');",
+    "INSERT INTO offline_sync_queue VALUES ('op_002', 'order', 'CREATE', '{\"id\":\"ord_990\",\"total\":249.99}', 'completed');",
+    "INSERT INTO offline_sync_queue VALUES ('op_003', 'inventory', 'DECREMENT', '{\"sku\":\"HEV-V\",\"qty\":1}', 'completed');",
+  ];
 
-  // Magic header: "SQLite format 3\0"
-  const magic = new TextEncoder().encode('SQLite format 3\0');
-  buffer.set(magic, 0);
-
-  // Page size 4096 (bytes 16-17)
-  buffer[16] = 0x10;
-  buffer[17] = 0x00;
-
-  // File format write = 2, read = 2 (WAL mode)
-  buffer[18] = 2;
-  buffer[19] = 2;
-
-  // Change counter = 1
-  buffer[27] = 1;
-
-  // Database size in pages = 1
-  buffer[31] = 1;
-
-  // Text encoding = 1 (UTF-8)
-  buffer[59] = 1;
-
-  // User version = 2
-  buffer[63] = 2;
-
-  // Embed table DDL into the page
-  const ddl1 = 'CREATE TABLE telemetry_metrics (id INTEGER PRIMARY KEY, metric_name TEXT, value REAL, recorded_at TEXT);\0';
-  const ddl2 = 'CREATE TABLE offline_sync_queue (op_id TEXT PRIMARY KEY, entity TEXT, action TEXT, payload JSON);\0';
-
-  const ddlBytes1 = new TextEncoder().encode(ddl1);
-  const ddlBytes2 = new TextEncoder().encode(ddl2);
-
-  buffer.set(ddlBytes1, 120);
-  buffer.set(ddlBytes2, 120 + ddlBytes1.length + 8);
-
-  return buffer;
+  try {
+    return await createRealSqliteDatabase(statements);
+  } catch (err) {
+    console.warn('[StorageLens] Failed to compile SQLite via sql.js, falling back to basic buffer:', err);
+    // Fallback basic buffer
+    const buf = new Uint8Array(4096);
+    buf.set(new TextEncoder().encode('SQLite format 3\0'), 0);
+    buf[16] = 0x10;
+    buf[18] = 2;
+    buf[19] = 2;
+    buf[27] = 1;
+    buf[31] = 1;
+    buf[59] = 1;
+    const ddl = 'CREATE TABLE telemetry_metrics (id INTEGER PRIMARY KEY, metric_name TEXT, value REAL, recorded_at TEXT);\0';
+    buf.set(new TextEncoder().encode(ddl), 120);
+    return buf;
+  }
 }
 
 export async function seedOpfsPlayground(): Promise<void> {
@@ -56,8 +49,8 @@ export async function seedOpfsPlayground(): Promise<void> {
     await createOpfsDirectory('', 'configs');
     await createOpfsDirectory('', 'logs');
 
-    // 2. Write SQLite database
-    const sqliteBytes = createSyntheticSqliteBuffer();
+    // 2. Write real SQLite database
+    const sqliteBytes = await generateSampleSqliteBuffer();
     await writeOpfsFile('/databases/app_analytics.sqlite', sqliteBytes);
 
     // 3. Write Config JSON

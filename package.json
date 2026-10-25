@@ -33,10 +33,12 @@
   "author": "Alexandr Motologa",
   "license": "MIT",
   "dependencies": {
+    "@types/sql.js": "^1.4.11",
     "clsx": "^2.1.1",
     "lucide-react": "^1.16.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "sql.js": "^1.15.1",
     "tailwind-merge": "^3.5.0"
   },
   "devDependencies": {

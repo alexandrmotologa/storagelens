@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { StorageTab, ToastNotification } from './types';
 import { Header } from './components/Header';
 import { Toast } from './components/common/Toast';
+import { CommandPalette } from './components/common/CommandPalette';
 
 // IndexedDB Components
 import { useIndexedDB } from './hooks/useIndexedDB';
@@ -24,6 +25,14 @@ import { RequestTable } from './components/cache/RequestTable';
 import { ResponseDrawer } from './components/cache/ResponseDrawer';
 import { AddCacheModal } from './components/cache/AddCacheModal';
 
+// Web Storage Components
+import { useWebStorage } from './hooks/useWebStorage';
+import { WebStorageStudio } from './components/webstorage/WebStorageStudio';
+
+// Web Locks Components
+import { useWebLocks } from './hooks/useWebLocks';
+import { WebLocksPanel } from './components/locks/WebLocksPanel';
+
 // Quota Components
 import { useStorageQuota } from './hooks/useStorageQuota';
 import { QuotaDashboard } from './components/quota/QuotaDashboard';
@@ -35,6 +44,7 @@ export const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<StorageTab>('indexeddb');
   const [notifications, setNotifications] = useState<ToastNotification[]>([]);
   const [isSeeding, setIsSeeding] = useState(false);
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
 
   const notify = (type: 'success' | 'error' | 'info', message: string) => {
     const id = `${Date.now()}_${Math.random()}`;
@@ -47,6 +57,18 @@ export const App: React.FC = () => {
   const dismissToast = (id: string) => {
     setNotifications((prev) => prev.filter((t) => t.id !== id));
   };
+
+  // Global Ctrl+K / Cmd+K Command Palette Shortcut
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setIsCommandPaletteOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // 1. IndexedDB State & Hooks
   const idb = useIndexedDB();
@@ -63,7 +85,13 @@ export const App: React.FC = () => {
   const cache = useCacheStorage();
   const [isAddCacheModalOpen, setIsAddCacheModalOpen] = useState(false);
 
-  // 4. Storage Quota State & Hooks
+  // 4. WebStorage State & Hooks
+  const webStorage = useWebStorage();
+
+  // 5. Web Locks State & Hooks
+  const locks = useWebLocks();
+
+  // 6. Storage Quota State & Hooks
   const quota = useStorageQuota();
 
   // Refresh all storage engines
@@ -72,8 +100,10 @@ export const App: React.FC = () => {
       idb.refreshDatabases(),
       opfs.refreshTree(),
       cache.refreshBuckets(),
+      locks.refreshLocks(),
       quota.refreshEstimate(),
     ]);
+    webStorage.refresh();
     notify('info', 'Refreshed storage engine reflection.');
   };
 
@@ -94,6 +124,20 @@ export const App: React.FC = () => {
     }
   };
 
+  // Calculate approximate OPFS total bytes
+  const calculateOpfsBytes = (nodes: typeof opfs.tree): number => {
+    let sum = 0;
+    nodes.forEach((n) => {
+      if (n.size) sum += n.size;
+      if (n.children) sum += calculateOpfsBytes(n.children);
+    });
+    return sum;
+  };
+  const opfsTotalBytes = calculateOpfsBytes(opfs.tree);
+
+  // Calculate total cache bytes
+  const cacheTotalBytes = cache.buckets.reduce((acc, b) => acc + b.totalBytes, 0);
+
   return (
     <div className="flex flex-col h-screen w-screen bg-slate-950 text-slate-100 overflow-hidden font-sans">
       {/* Header bar */}
@@ -103,10 +147,13 @@ export const App: React.FC = () => {
         quotaEstimate={quota.estimate}
         onRefreshAll={handleRefreshAll}
         onSeedPlayground={handleSeedPlayground}
+        onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
         isSeeding={isSeeding}
         dbCount={idb.databases.length}
         opfsCount={opfs.tree.length}
         cacheCount={cache.buckets.length}
+        webStorageCount={webStorage.stats.itemCount}
+        locksCount={locks.snapshot.held.length + locks.snapshot.pending.length}
       />
 
       {/* Main Studio Viewport */}
@@ -203,8 +250,10 @@ export const App: React.FC = () => {
               hexOffset={opfs.hexOffset}
               sqliteHeader={opfs.sqliteHeader}
               sqliteSchemas={opfs.sqliteSchemas}
+              rawBuffer={opfs.rawBuffer}
               onNextHexPage={opfs.nextHexPage}
               onPrevHexPage={opfs.prevHexPage}
+              onJumpToOffset={opfs.jumpToOffset}
               onDownloadFile={opfs.downloadSelectedFile}
               onDeleteFile={async () => {
                 if (opfs.selectedNode) {
@@ -249,11 +298,20 @@ export const App: React.FC = () => {
           </div>
         )}
 
-        {/* TAB 4: QUOTA & STRESS SIMULATOR */}
+        {/* TAB 4: WEB STORAGE (LOCAL & SESSION STORAGE) */}
+        {activeTab === 'webstorage' && (
+          <WebStorageStudio onNotify={notify} />
+        )}
+
+        {/* TAB 5: STORAGE QUOTA & STRESS SIMULATOR */}
         {activeTab === 'quota' && (
           <QuotaDashboard
             estimate={quota.estimate}
             stressState={quota.stressState}
+            idbBytes={quota.estimate?.usageDetails?.indexedDB || 0}
+            opfsBytes={opfsTotalBytes}
+            cacheBytes={cacheTotalBytes}
+            webStorageBytes={webStorage.stats.totalBytes}
             onRefreshEstimate={quota.refreshEstimate}
             onRequestPersist={quota.requestPersist}
             onStartStress={quota.startStressTest}
@@ -261,6 +319,11 @@ export const App: React.FC = () => {
             onPurgeStress={quota.purgeStressTest}
             onNotify={notify}
           />
+        )}
+
+        {/* TAB 6: WEB LOCKS & CONCURRENCY */}
+        {activeTab === 'locks' && (
+          <WebLocksPanel onNotify={notify} />
         )}
       </main>
 
@@ -308,6 +371,26 @@ export const App: React.FC = () => {
           await cache.addUrl(url);
           notify('success', `Successfully cached "${url}".`);
         }}
+      />
+
+      {/* Global Command Palette (Ctrl+K / Cmd+K) */}
+      <CommandPalette
+        isOpen={isCommandPaletteOpen}
+        onClose={() => setIsCommandPaletteOpen(false)}
+        onSelectTab={setActiveTab}
+        databases={idb.databases}
+        onSelectDb={(dbName, storeName) => {
+          idb.selectDatabase(dbName);
+          if (storeName) idb.selectStore(storeName);
+        }}
+        opfsTree={opfs.tree}
+        onSelectOpfsNode={opfs.selectNode}
+        cacheBuckets={cache.buckets}
+        onSelectCacheBucket={cache.setSelectedBucketName}
+        onSeedPlayground={handleSeedPlayground}
+        onRefreshAll={handleRefreshAll}
+        onRequestPersist={quota.requestPersist}
+        onPurgeStress={quota.purgeStressTest}
       />
 
       {/* Toast Notification Container */}

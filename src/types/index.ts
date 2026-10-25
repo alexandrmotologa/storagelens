@@ -1,4 +1,4 @@
-export type StorageTab = 'indexeddb' | 'opfs' | 'cache' | 'quota';
+export type StorageTab = 'indexeddb' | 'opfs' | 'cache' | 'webstorage' | 'quota' | 'locks';
 
 export interface ToastNotification {
   id: string;

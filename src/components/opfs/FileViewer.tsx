@@ -11,8 +11,12 @@ import {
   ChevronRight,
   Info,
   Layers,
+  Terminal,
+  Crosshair,
 } from 'lucide-react';
 import { formatBytes } from '../../quota/estimate';
+import { SqlConsole } from './SqlConsole';
+import { inspectByteAt, ByteDetails } from '../../opfs/hex_viewer';
 
 interface FileViewerProps {
   selectedNode: OpfsNode | null;
@@ -21,8 +25,10 @@ interface FileViewerProps {
   hexOffset: number;
   sqliteHeader: SqliteHeader | null;
   sqliteSchemas: SqliteSchemaItem[];
+  rawBuffer: Uint8Array | null;
   onNextHexPage: () => void;
   onPrevHexPage: () => void;
+  onJumpToOffset: (offset: number) => void;
   onDownloadFile: () => void;
   onDeleteFile: () => void;
 }
@@ -34,24 +40,52 @@ export const FileViewer: React.FC<FileViewerProps> = ({
   hexOffset,
   sqliteHeader,
   sqliteSchemas,
+  rawBuffer,
   onNextHexPage,
   onPrevHexPage,
+  onJumpToOffset,
   onDownloadFile,
   onDeleteFile,
 }) => {
-  const [activeSubTab, setActiveSubTab] = useState<'hex' | 'sqlite' | 'text'>('hex');
+  const [activeSubTab, setActiveSubTab] = useState<'hex' | 'sql' | 'sqlite' | 'text'>('hex');
+  const [jumpInput, setJumpInput] = useState('');
+  const [hoveredByte, setHoveredByte] = useState<ByteDetails | null>(null);
 
   if (!selectedNode || selectedNode.kind !== 'file') {
     return (
       <div className="flex-1 flex flex-col items-center justify-center text-slate-500 text-sm">
         <File className="w-10 h-10 mb-3 text-slate-700" />
-        <p>Select a file from the OPFS file tree to inspect binary bytes or schema.</p>
+        <p>Select a file from the OPFS file tree to inspect binary bytes, SQLite schemas, or run SQL queries.</p>
       </div>
     );
   }
 
   const isSqlite = Boolean(sqliteHeader && sqliteHeader.magicValid);
   const hasText = fileText !== null;
+
+  const handleJumpSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const clean = jumpInput.trim();
+    if (!clean) return;
+
+    let targetOffset = 0;
+    if (clean.toLowerCase().startsWith('0x')) {
+      targetOffset = parseInt(clean, 16);
+    } else {
+      targetOffset = parseInt(clean, 10);
+    }
+
+    if (!isNaN(targetOffset) && targetOffset >= 0) {
+      onJumpToOffset(targetOffset);
+    }
+  };
+
+  const handleByteHover = (rowIndex: number, byteIndex: number) => {
+    if (!rawBuffer) return;
+    const absIndex = hexOffset + rowIndex * 16 + byteIndex;
+    const details = inspectByteAt(rawBuffer, absIndex, 0);
+    setHoveredByte(details);
+  };
 
   return (
     <div className="flex-1 flex flex-col h-full bg-slate-900/40 overflow-hidden">
@@ -71,7 +105,7 @@ export const FileViewer: React.FC<FileViewerProps> = ({
               </span>
               {isSqlite && (
                 <span className="text-[10px] uppercase font-semibold px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">
-                  SQLite 3
+                  SQLite 3 Database
                 </span>
               )}
             </div>
@@ -101,7 +135,7 @@ export const FileViewer: React.FC<FileViewerProps> = ({
       </div>
 
       {/* Sub-Tab Navigation Bar */}
-      <div className="px-3 py-2 border-b border-slate-800 bg-slate-950/70 flex items-center justify-between">
+      <div className="px-3 py-2 border-b border-slate-800 bg-slate-950/70 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-1 bg-slate-900 p-0.5 rounded-lg border border-slate-800 text-xs">
           <button
             onClick={() => setActiveSubTab('hex')}
@@ -116,17 +150,31 @@ export const FileViewer: React.FC<FileViewerProps> = ({
           </button>
 
           {isSqlite && (
-            <button
-              onClick={() => setActiveSubTab('sqlite')}
-              className={`flex items-center gap-1.5 px-3 py-1 rounded-md transition-colors ${
-                activeSubTab === 'sqlite'
-                  ? 'bg-blue-600 text-white font-medium'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <Database className="w-3.5 h-3.5" />
-              <span>SQLite Schema ({sqliteSchemas.length} tables)</span>
-            </button>
+            <>
+              <button
+                onClick={() => setActiveSubTab('sql')}
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-md transition-colors ${
+                  activeSubTab === 'sql'
+                    ? 'bg-blue-600 text-white font-medium'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Terminal className="w-3.5 h-3.5" />
+                <span>SQL Query Runner</span>
+              </button>
+
+              <button
+                onClick={() => setActiveSubTab('sqlite')}
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-md transition-colors ${
+                  activeSubTab === 'sqlite'
+                    ? 'bg-blue-600 text-white font-medium'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Database className="w-3.5 h-3.5" />
+                <span>SQLite Header & Schema ({sqliteSchemas.length})</span>
+              </button>
+            </>
           )}
 
           {hasText && (
@@ -144,11 +192,29 @@ export const FileViewer: React.FC<FileViewerProps> = ({
           )}
         </div>
 
-        {/* Hex Paging Controls (visible when in Hex mode) */}
+        {/* Hex Jump & Paging Controls */}
         {activeSubTab === 'hex' && hexPage && (
           <div className="flex items-center gap-2 text-xs">
-            <span className="text-slate-400 font-mono text-[11px]">
-              Offset 0x{hexOffset.toString(16).padStart(8, '0').toUpperCase()} - 0x
+            {/* Jump to offset form */}
+            <form onSubmit={handleJumpSubmit} className="flex items-center gap-1">
+              <input
+                type="text"
+                placeholder="Offset (e.g. 0x100)"
+                value={jumpInput}
+                onChange={(e) => setJumpInput(e.target.value)}
+                className="w-28 px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-200 text-[11px] font-mono focus:outline-none focus:border-blue-500"
+              />
+              <button
+                type="submit"
+                className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"
+                title="Jump to offset"
+              >
+                <Crosshair className="w-3 h-3" />
+              </button>
+            </form>
+
+            <span className="text-slate-400 font-mono text-[11px] border-l border-slate-800 pl-2">
+              0x{hexOffset.toString(16).padStart(8, '0').toUpperCase()} - 0x
               {(hexOffset + hexPage.rows.length * 16).toString(16).padStart(8, '0').toUpperCase()} of {formatBytes(hexPage.totalBytes)}
             </span>
             <div className="flex items-center gap-1 border-l border-slate-800 pl-2">
@@ -174,65 +240,99 @@ export const FileViewer: React.FC<FileViewerProps> = ({
       </div>
 
       {/* Main View Area */}
-      <div className="flex-1 overflow-auto p-4">
+      <div className="flex-1 overflow-auto p-4 flex flex-col">
         {/* TAB 1: 16-BYTE HEX DUMP VIEWER */}
         {activeSubTab === 'hex' && (
-          <div className="bg-slate-950 border border-slate-800 rounded-lg p-3 font-mono text-xs overflow-x-auto">
-            {hexPage && hexPage.rows.length > 0 ? (
-              <table className="border-collapse">
-                <thead>
-                  <tr className="text-slate-500 border-b border-slate-800/80 text-[11px]">
-                    <th className="pr-4 pb-2 text-left font-semibold">Offset</th>
-                    <th className="pr-4 pb-2 text-left font-semibold" colSpan={16}>
-                      Hex Bytes (00 - 0F)
-                    </th>
-                    <th className="pl-4 pb-2 text-left font-semibold">Decoded Text</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800/40">
-                  {hexPage.rows.map((row) => (
-                    <tr key={row.offsetHex} className="hover:bg-slate-900/50">
-                      {/* Offset */}
-                      <td className="pr-4 py-1 text-blue-400 font-semibold select-none">
-                        {row.offsetHex}
-                      </td>
-
-                      {/* 16 Hex Byte values */}
-                      {row.bytesHex.map((b, idx) => (
-                        <td
-                          key={idx}
-                          className={`py-1 px-1 text-center ${
-                            b === ''
-                              ? 'text-transparent'
-                              : b === '00'
-                              ? 'text-slate-600'
-                              : 'text-slate-200'
-                          } ${idx === 7 ? 'pr-3 border-r border-slate-800/60' : ''}`}
-                        >
-                          {b || '..'}
-                        </td>
-                      ))}
-
-                      {/* ASCII column */}
-                      <td className="pl-4 py-1 text-emerald-300 border-l border-slate-800 select-all whitespace-pre">
-                        {row.asciiText}
-                      </td>
+          <div className="space-y-3 flex-1 flex flex-col">
+            <div className="bg-slate-950 border border-slate-800 rounded-lg p-3 font-mono text-xs overflow-x-auto flex-1">
+              {hexPage && hexPage.rows.length > 0 ? (
+                <table className="border-collapse w-full">
+                  <thead>
+                    <tr className="text-slate-500 border-b border-slate-800/80 text-[11px]">
+                      <th className="pr-4 pb-2 text-left font-semibold">Offset</th>
+                      <th className="pr-4 pb-2 text-left font-semibold" colSpan={16}>
+                        Hex Bytes (00 - 0F)
+                      </th>
+                      <th className="pl-4 pb-2 text-left font-semibold">ASCII</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : (
-              <div className="text-slate-500 text-center py-8">
-                Empty file (0 bytes).
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/40">
+                    {hexPage.rows.map((row, rIdx) => (
+                      <tr key={row.offsetHex} className="hover:bg-slate-900/50">
+                        <td className="pr-4 py-1 text-blue-400 font-semibold select-none">
+                          {row.offsetHex}
+                        </td>
+
+                        {row.bytesHex.map((b, bIdx) => (
+                          <td
+                            key={bIdx}
+                            onMouseEnter={() => handleByteHover(rIdx, bIdx)}
+                            className={`py-1 px-1 text-center cursor-crosshair hover:bg-blue-600/30 rounded ${
+                              b === ''
+                                ? 'text-transparent'
+                                : b === '00'
+                                ? 'text-slate-600'
+                                : 'text-slate-200'
+                            } ${bIdx === 7 ? 'pr-3 border-r border-slate-800/60' : ''}`}
+                          >
+                            {b || '..'}
+                          </td>
+                        ))}
+
+                        <td className="pl-4 py-1 text-emerald-300 border-l border-slate-800 select-all whitespace-pre">
+                          {row.asciiText}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <div className="text-slate-500 text-center py-8">
+                  Empty file (0 bytes).
+                </div>
+              )}
+            </div>
+
+            {/* Byte Inspector Tooltip Card */}
+            {hoveredByte && (
+              <div className="p-2.5 rounded-lg bg-slate-950 border border-slate-800 text-[11px] font-mono grid grid-cols-2 sm:grid-cols-6 gap-2 text-slate-300">
+                <div>
+                  <span className="text-slate-500 block text-[9px] uppercase">Offset</span>
+                  <span className="text-blue-400 font-bold">{hoveredByte.offsetHex}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500 block text-[9px] uppercase">Hex / ASCII</span>
+                  <span>0x{hoveredByte.byteHex} &bull; &ldquo;{hoveredByte.charAscii}&rdquo;</span>
+                </div>
+                <div>
+                  <span className="text-slate-500 block text-[9px] uppercase">Binary (8-bit)</span>
+                  <span className="text-emerald-400">{hoveredByte.byteBin}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500 block text-[9px] uppercase">Uint8 / Int8</span>
+                  <span>{hoveredByte.uint8} / {hoveredByte.int8}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500 block text-[9px] uppercase">Uint16 (LE)</span>
+                  <span>{hoveredByte.uint16LE ?? '-'}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500 block text-[9px] uppercase">Uint32 (LE)</span>
+                  <span>{hoveredByte.uint32LE ?? '-'}</span>
+                </div>
               </div>
             )}
           </div>
         )}
 
-        {/* TAB 2: SQLITE SCHEMA INSPECTOR */}
+        {/* TAB 2: SQL QUERY RUNNER */}
+        {activeSubTab === 'sql' && isSqlite && (
+          <SqlConsole dbBuffer={rawBuffer} schemas={sqliteSchemas} />
+        )}
+
+        {/* TAB 3: SQLITE SCHEMA INSPECTOR */}
         {activeSubTab === 'sqlite' && sqliteHeader && (
           <div className="space-y-4">
-            {/* 100-Byte SQLite Header Cards */}
             <div>
               <div className="flex items-center gap-2 mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
                 <Info className="w-3.5 h-3.5 text-blue-400" />
@@ -297,7 +397,6 @@ export const FileViewer: React.FC<FileViewerProps> = ({
               </div>
             </div>
 
-            {/* Parsed Schema DDL Items */}
             <div>
               <div className="flex items-center gap-2 mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
                 <Layers className="w-3.5 h-3.5 text-emerald-400" />
@@ -337,7 +436,7 @@ export const FileViewer: React.FC<FileViewerProps> = ({
           </div>
         )}
 
-        {/* TAB 3: TEXT / CODE PREVIEW */}
+        {/* TAB 4: TEXT / CODE PREVIEW */}
         {activeSubTab === 'text' && hasText && (
           <div className="p-3 rounded-lg bg-slate-950 border border-slate-800 font-mono text-xs text-slate-200 overflow-x-auto">
             <pre>{fileText}</pre>

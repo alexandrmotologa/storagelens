@@ -15,10 +15,15 @@ import {
   Cpu,
 } from 'lucide-react';
 import { formatBytes } from '../../quota/estimate';
+import { StorageBreakdownChart } from './StorageBreakdownChart';
 
 interface QuotaDashboardProps {
   estimate: QuotaEstimate | null;
   stressState: StressTestState;
+  idbBytes?: number;
+  opfsBytes?: number;
+  cacheBytes?: number;
+  webStorageBytes?: number;
   onRefreshEstimate: () => void;
   onRequestPersist: () => Promise<boolean>;
   onStartStress: (config: StressTestConfig) => Promise<void>;
@@ -30,6 +35,10 @@ interface QuotaDashboardProps {
 export const QuotaDashboard: React.FC<QuotaDashboardProps> = ({
   estimate,
   stressState,
+  idbBytes = 0,
+  opfsBytes = 0,
+  cacheBytes = 0,
+  webStorageBytes = 0,
   onRefreshEstimate,
   onRequestPersist,
   onStartStress,
@@ -199,6 +208,14 @@ export const QuotaDashboard: React.FC<QuotaDashboardProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Breakdown Distribution Proportions Chart */}
+      <StorageBreakdownChart
+        idbBytes={idbBytes}
+        opfsBytes={opfsBytes}
+        cacheBytes={cacheBytes}
+        webStorageBytes={webStorageBytes}
+      />
 
       {/* Bottom Section: Disk Pressure & Eviction Simulator */}
       <div className="p-5 rounded-xl bg-slate-900 border border-slate-800 shadow-lg space-y-5">
