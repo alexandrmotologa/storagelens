@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a" />
+      <stop offset="100%" stop-color="#020617" />
+    </linearGradient>
+    <linearGradient id="primaryGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3b82f6" />
+      <stop offset="100%" stop-color="#6366f1" />
+    </linearGradient>
+    <linearGradient id="accentGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8" />
+      <stop offset="100%" stop-color="#818cf8" />
+    </linearGradient>
+  </defs>
+
+  <!-- Background squircle -->
+  <rect x="4" y="4" width="112" height="112" rx="28" fill="url(#bgGrad)" stroke="#1e293b" stroke-width="2" />
+
+  <!-- Storage Disks Stack -->
+  <g transform="translate(24, 28)">
+    <!-- Bottom Cylinder -->
+    <path d="M 0,44 C 0,54 72,54 72,44 L 72,52 C 72,62 0,62 0,52 Z" fill="#1e293b" opacity="0.8" />
+    <path d="M 0,32 C 0,42 72,42 72,32 L 72,44 C 72,54 0,54 0,44 Z" fill="url(#primaryGrad)" opacity="0.6" />
+    <path d="M 0,16 C 0,26 72,26 72,16 L 72,28 C 72,38 0,38 0,28 Z" fill="url(#primaryGrad)" opacity="0.8" />
+    <!-- Top Disk Ellipse -->
+    <ellipse cx="36" cy="16" rx="36" ry="10" fill="url(#accentGrad)" />
+    <!-- Center Hole Accent -->
+    <ellipse cx="36" cy="16" rx="10" ry="3.5" fill="#0f172a" opacity="0.6" />
+  </g>
+
+  <!-- Magnifying Lens Ring -->
+  <circle cx="78" cy="74" r="22" fill="none" stroke="url(#accentGrad)" stroke-width="4.5" />
+  <circle cx="78" cy="74" r="17" fill="#3b82f6" fill-opacity="0.15" />
+  <!-- Lens Handle -->
+  <line x1="94" y1="90" x2="108" y2="104" stroke="url(#primaryGrad)" stroke-width="5" stroke-linecap="round" />
+</svg>

@@ -1,0 +1,57 @@
+{
+  "name": "storagelens",
+  "version": "1.0.0",
+  "description": "Browser client storage studio and offline database workbench for IndexedDB, OPFS SQLite, CacheStorage, and quota stress testing",
+  "type": "module",
+  "main": "dist-drawer/storagelens.js",
+  "module": "dist-drawer/storagelens.js",
+  "types": "dist-drawer/index.d.ts",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "build:drawer": "vite build --config vite.config.drawer.ts",
+    "build:all": "npm run build && npm run build:drawer",
+    "preview": "vite preview",
+    "test": "vitest run"
+  },
+  "keywords": [
+    "indexeddb",
+    "opfs",
+    "browser-storage",
+    "cachestorage",
+    "sqlite",
+    "duckdb",
+    "pwa",
+    "offline-first",
+    "devtools",
+    "web-workers",
+    "hex-viewer",
+    "typescript",
+    "react19",
+    "tailwindcss"
+  ],
+  "author": "Alexandr Motologa",
+  "license": "MIT",
+  "dependencies": {
+    "clsx": "^2.1.1",
+    "lucide-react": "^1.16.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "tailwind-merge": "^3.5.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/node": "^22.13.0",
+    "@types/react": "^19.0.8",
+    "@types/react-dom": "^19.0.3",
+    "@vitejs/plugin-react": "^4.3.4",
+    "autoprefixer": "^10.4.20",
+    "fake-indexeddb": "^6.0.0",
+    "happy-dom": "^21.0.4",
+    "postcss": "^8.5.1",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^5.7.3",
+    "vite": "^6.1.0",
+    "vitest": "^5.0.5"
+  }
+}

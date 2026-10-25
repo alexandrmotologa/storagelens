@@ -1,25 +1,25 @@
 # StorageLens: Master Implementation Plan
 
-> **Browser Client Storage & Offline Database Workbench for IndexedDB, OPFS & ServiceWorker**
->
-> *Deep-dive browser storage inspector and client-side database studio. Visualizes IndexedDB object stores and indexes with full-text search, explores the hidden Origin Private File System (OPFS) sandbox and embedded SQLite/DuckDB databases, inspects CacheStorage responses, and simulates quota exhaustion under disk pressure.*
+> Browser client storage and offline database workbench for IndexedDB, OPFS, and ServiceWorker.
+> Inspects IndexedDB object stores with cursor pagination and full-text search, explores the Origin Private File System (OPFS) sandbox and embedded SQLite databases with a binary hex dump viewer, audits CacheStorage response headers, and simulates quota exhaustion under disk pressure.
 
 ---
 
-## 1. Project Overview & Architecture
+## 1. System Architecture and Component Design
 
-Modern web applications, Progressive Web Apps (PWAs), and local-first software increasingly store substantial data directly inside the browser (IndexedDB, Origin Private File System - OPFS, SQLite Wasm, PGlite, RxDB, Dexie.js). However, developers are severely limited by browser developer tools:
-1. **Archaic Chrome "Application" Tab**: The built-in IndexedDB viewer is slow, lacks pagination, fails on stores with more than 10,000 items, and has no search or schema visualization.
-2. **Invisible OPFS File System**: The Origin Private File System (OPFS) is a fast, hidden virtual filesystem where SQLite Wasm and DuckDB store `.db` files. Browsers provide zero native GUI to view, download, or edit files stored in OPFS.
-3. **Opaque ServiceWorker CacheStorage**: Developers cannot inspect binary assets, response headers (`Content-Type`, `Cache-Control`), or evaluate cache invalidation policies across `window.caches`.
-4. **Untested Disk Quota Failures**: Applications crash when users run out of storage on mobile devices because developers cannot easily simulate the dreaded `QuotaExceededError` in local development.
+Modern web applications, Progressive Web Apps, and offline-first software store substantial data directly in client browsers using IndexedDB, the Origin Private File System (OPFS), SQLite Wasm, and ServiceWorker caches. Built-in browser developer tools have clear limitations:
+1. Chrome DevTools Application tab lacks virtualized pagination, degrades on stores with more than 10,000 records, and provides no schema-wide search.
+2. The Origin Private File System sandbox is invisible by default, with no native browser interface to inspect, read, or export SQLite and DuckDB binary files.
+3. CacheStorage interfaces omit HTTP caching policy audits, validation token checks, and response header breakdowns.
+4. Developers have no built-in mechanism to test application resilience against `QuotaExceededError` exceptions before deployment.
 
-**StorageLens** delivers a modern, in-browser developer studio and diagnostics workbench:
-- **IndexedDB Deep Data Grid**: Full schema reflection, virtualized table rendering, full-text search across all object stores, JSON record editor, and CSV/JSON export.
-- **OPFS Virtual File Explorer**: Interactive tree view of the hidden OPFS directory structure, previewing text, binary hex dumps, and downloading SQLite/DuckDB databases with 1 click.
-- **CacheStorage Inspector**: Analyzes cached `Request` / `Response` pairs, measures byte sizes, and audits caching headers.
-- **Quota Pressure & Eviction Simulator**: Queries `navigator.storage.estimate()` and simulates quota exhaustion by allocating dummy chunks to test graceful offline degradation.
-- **Drop-in Embed or Standalone App**: Available as a lightweight in-app floating drawer or a standalone desktop/web app connecting via Chrome DevTools Protocol (CDP).
+StorageLens provides an in-browser studio and diagnostics engine:
+- **IndexedDB Studio**: Discovers all databases and object stores, runs cursor-paginated queries, applies multi-field text search, provides an inline JSON record editor, and exports to JSON, CSV, and SQL.
+- **OPFS Virtual File Explorer**: Traverses the private file system tree, decodes SQLite 3 database headers and tables, provides a 16-byte binary hex dump viewer with chunked pagination, and supports file upload and download.
+- **CacheStorage Inspector**: Inspects cached requests and responses, verifies `Cache-Control`, `ETag`, and `Last-Modified` headers, and previews JSON, text, and image payloads.
+- **Storage Quota Simulator**: Tracks `navigator.storage.estimate()` metrics and allocates synthetic data blocks to test application error handling when storage limits are reached.
+- **Dual Runtime**: Operates as a standalone web dashboard and as an embeddable shadow DOM drawer with a floating launcher.
+- **Storage Playground**: Includes sample data generators for IndexedDB, OPFS SQLite, and CacheStorage for instant verification on clean browser profiles.
 
 ```
 +-----------------------------------------------------------------------------------+
@@ -31,8 +31,9 @@ Modern web applications, Progressive Web Apps (PWAs), and local-first software i
 +-------v-------------------------+                 +-----------------------v-------+
 |    IndexedDB Reflection Engine  |                 |     OPFS Sandbox Explorer     |
 |  * Multi-Database Schema Tree   |                 |  * Directory Hierarchy Reader |
-|  * Object Stores & Key Paths    |                 |  * SQLite / DuckDB .db Inspect|
-|  * Virtualized Data Grid        |                 |  * File Download & Upload     |
+|  * Object Stores & Key Paths    |                 |  * SQLite 3 Header & Schema   |
+|  * Cursor Paging & Full Search  |                 |  * 16-Byte Chunked Hex Viewer |
+|  * JSON CRUD & CSV/SQL Export   |                 |  * Local File Download/Upload |
 +-------+-------------------------+                 +-----------------------+-------+
         |                                                                   |
         +---------------------------------+---------------------------------+
@@ -41,21 +42,23 @@ Modern web applications, Progressive Web Apps (PWAs), and local-first software i
                         |    CacheStorage & PWA Auditor     |
                         |  * window.caches Ingestion        |
                         |  * Request / Response Payloads    |
-                        |  * Cache Header Verification      |
+                        |  * Header Policy Verification     |
+                        |  * Visual Payload Previews        |
                         +-----------------+-----------------+
                                           |
                         +-----------------v-----------------+
                         |   Storage Quota Stress Tester     |
                         |  * navigator.storage.estimate()   |
-                        |  * Simulated QuotaExceededError   |
-                        |  * Eviction Resilience Validator  |
+                        |  * Synthetic Pressure Allocator   |
+                        |  * QuotaExceededError Trapper     |
+                        |  * Instant Storage Cleanup        |
                         +-----------------+-----------------+
                                           |
                         +-----------------v-----------------+
-                        |   Interactive Web Studio & Drawer |
-                        |  * Virtualized JSON Data Grid     |
-                        |  * Binary Hex Dump Viewer         |
-                        |  * 1-Click Export (SQLite / JSON) |
+                        |   Studio UI & In-Page Drawer      |
+                        |  * Full-Screen React 19 Studio    |
+                        |  * Isolated Shadow DOM Mount      |
+                        |  * Storage Seed Playground        |
                         +-----------------------------------+
 ```
 
@@ -67,103 +70,95 @@ Modern web applications, Progressive Web Apps (PWAs), and local-first software i
 storagelens/
 ├── src/
 │   ├── indexeddb/
-│   │   ├── reflector.go          # Reflects DB names, version, stores, indexes
-│   │   ├── query.ts              # Key-range queries, cursor pagination, search
-│   │   ├── mutator.ts            # Insert, update, and delete record handlers
-│   │   └── exporter.ts           # JSON / CSV export and schema dump
+│   │   ├── types.ts              # IndexedDB schema, record, and query types
+│   │   ├── reflector.ts          # Database, store, and index discovery
+│   │   ├── query.ts              # Cursor pagination, key ranges, and search
+│   │   ├── mutator.ts            # Insert, update, delete records, and manage stores
+│   │   └── exporter.ts           # JSON, CSV, and SQL export/import handlers
 │   ├── opfs/
-│   │   ├── file_tree.ts          # Recursive DirectoryHandle traversal
-│   │   ├── reader.ts             # FileSystemSyncAccessHandle / File API reader
-│   │   ├── hex_viewer.ts         # Byte hex/ASCII formatter for binary files
-│   │   └── sqlite_adapter.ts     # Detects and extracts SQLite Wasm database headers
+│   │   ├── types.ts              # File tree, binary node, and SQLite schema types
+│   │   ├── file_tree.ts          # Recursive DirectoryHandle traversal and mutations
+│   │   ├── reader.ts             # File API reader and download dispatcher
+│   │   ├── hex_viewer.ts         # 16-byte offset hex and ASCII formatter with paging
+│   │   └── sqlite_parser.ts      # SQLite 3 100-byte header decoder and schema reader
 │   ├── cache/
-│   │   ├── cache_inspector.ts    # window.caches reader and response extractor
-│   │   └── header_audit.ts       # Verifies TTL, Cache-Control, and ETag presence
+│   │   ├── types.ts              # Cache entries, audit findings, and response types
+│   │   ├── inspector.ts          # window.caches reader and response cloner
+│   │   ├── header_audit.ts       # Cache-Control, ETag, and freshness validation
+│   │   └── mutator.ts            # Cache entry removal and cache bucket deletion
 │   ├── quota/
-│   │   ├── estimate.ts           # Usage vs Quota percentage calculator
-│   │   └── stress_tester.ts      # Allocates memory/storage to trigger QuotaExceededError
-│   └── drawer/
-│       ├── host.ts               # In-page drawer mount manager
-│       └── host.css              # Isolated shadow-DOM styling
-├── web/
-│   ├── src/
-│   │   ├── components/
-│   │   │   ├── IdbGridView.tsx       # Virtualized records table with search & filter
-│   │   │   ├── OpfsTreeViewer.tsx    # Interactive file tree with binary preview
-│   │   │   ├── CacheAuditorList.tsx  # ServiceWorker cache records & headers
-│   │   │   ├── QuotaGauge.tsx        # Storage usage gauge with stress-test slider
-│   │   │   └── RecordEditModal.tsx   # JSON schema-aware record editor
-│   │   ├── hooks/
-│   │   │   └── useStorageState.ts
-│   │   ├── App.tsx
-│   │   └── main.tsx
-│   ├── package.json
-│   └── vite.config.ts
+│   │   ├── types.ts              # Quota estimate, breakdown, and stress test state
+│   │   ├── estimate.ts           # Usage vs quota calculator and persistence checks
+│   │   └── stress_tester.ts      # Chunked pressure allocator and quota error trapper
+│   ├── playground/
+│   │   ├── seed_indexeddb.ts     # Sample e-commerce and task databases
+│   │   ├── seed_opfs.ts          # Sample text files, JSON configs, and valid SQLite DB
+│   │   └── seed_cache.ts         # Sample API responses and static assets
+│   ├── components/
+│   │   ├── common/               # Badges, modals, code viewers, and toolbars
+│   │   ├── indexeddb/            # DB tree, virtualized grid, search bar, and record modal
+│   │   ├── opfs/                 # Directory tree, hex viewer, SQLite view, and upload modal
+│   │   ├── cache/                # Cache bucket list, request table, and header drawer
+│   │   └── quota/                # Quota gauge, storage cards, and stress test console
+│   ├── drawer/
+│   │   ├── host.ts               # Shadow DOM creation and launcher badge
+│   │   └── index.ts              # Entry point for storagelens.js embed library
+│   ├── hooks/
+│   │   ├── useIndexedDB.ts       # Hook for database reflection and query state
+│   │   ├── useOPFS.ts            # Hook for OPFS tree traversal and file selection
+│   │   ├── useCacheStorage.ts    # Hook for cache buckets and audits
+│   │   └── useStorageQuota.ts    # Hook for quota estimation and stress testing
+│   ├── types/                    # Shared application types and tab identifiers
+│   ├── App.tsx                   # Main studio application shell
+│   ├── main.tsx                  # Standalone entry point
+│   └── index.css                 # Tailwind utility styles
 ├── tests/
-│   ├── indexeddb.test.ts
-│   └── opfs.test.ts
+│   ├── setup.ts                  # Test harness with fake-indexeddb
+│   ├── indexeddb.test.ts         # Reflection, query, search, and mutation tests
+│   ├── opfs.test.ts              # Hex formatting and SQLite header decoding tests
+│   ├── cache.test.ts             # Header audit policy and cache inspection tests
+│   └── quota.test.ts             # Quota calculations and stress allocation tests
+├── docs/
+│   └── images/                   # UI screenshots and animated demo GIF
+├── index.html                    # Standalone HTML container
 ├── package.json
 ├── tsconfig.json
+├── vite.config.ts                # Standalone studio bundler
+├── vite.config.drawer.ts         # In-page drawer library bundler
 └── README.md
 ```
 
 ---
 
-## 3. Implementation Roadmap
+## 3. Implementation Phases
 
-### Phase 1: IndexedDB Schema Reflection & Virtualized Query Engine
-- Implement `src/indexeddb/reflector.ts`:
-  - Query `indexedDB.databases()` to discover all databases and version numbers.
-  - Open each database to enumerate `objectStoreNames`, `keyPath`, `autoIncrement`, and defined `indexNames`.
-- Implement `src/indexeddb/query.ts`:
-  - High-performance cursor pagination using `IDBKeyRange` to fetch records in batches of 100.
-  - Implement client-side in-memory filter matching substring queries against any field within stored JSON objects.
+### Phase 1: Core Engine Libraries
+- Implement IndexedDB reflection, cursor pagination, filtering, record CRUD, and export routines.
+- Implement OPFS file tree traversal, file creation, deletion, hex formatting, and SQLite 3 header decoding.
+- Implement CacheStorage inspection, response cloning, and HTTP header auditing.
+- Implement storage quota estimation and chunked pressure allocation.
+- Write unit tests for all four modules in `tests/`.
 
-### Phase 2: Origin Private File System (OPFS) Sandbox Explorer
-- Implement `src/opfs/file_tree.ts`:
-  - Access `navigator.storage.getDirectory()` to obtain the OPFS root handle.
-  - Recursively traverse subdirectories using `values()` iterator on `FileSystemDirectoryHandle`.
-  - Extract metadata: file name, byte size, modification timestamp.
-- Implement `src/opfs/reader.ts`:
-  - Read binary files via `getFile()`.
-  - Implement `src/opfs/sqlite_adapter.ts`: Detect the standard 16-byte SQLite header string (`"SQLite format 3\000"`), extract page size and database schema tables.
-  - Provide instant file download to user's local disk.
+### Phase 2: Playground & Sample Data Engine
+- Build seed generators for IndexedDB (`ecommerce_db`, `notes_db`).
+- Build seed generators for OPFS (text logs, configuration JSON, and a valid binary SQLite 3 database).
+- Build seed generators for CacheStorage (`api-cache-v1`, `assets-cache-v1`).
 
-### Phase 3: CacheStorage Inspector & Response Auditing
-- Implement `src/cache/cache_inspector.ts`:
-  - Ingest `window.caches.keys()`.
-  - For each cache, fetch all `Request` keys using `cache.keys()`.
-  - Clone matching `Response` objects to extract: status, statusText, headers (`Cache-Control`, `Content-Type`, `Content-Length`), and preview body text or image preview.
+### Phase 3: React 19 Studio Components
+- Build the navigation header with origin details, quota preview, dark mode toggle, and seed launcher.
+- Build the IndexedDB studio with database navigation, virtualized data grid, index query selector, search filter, and record edit modal.
+- Build the OPFS file explorer with tree navigation, 16-byte hex dump viewer, SQLite schema table, and text viewer.
+- Build the CacheStorage auditor with status badges, header audit cards, and body payload preview.
+- Build the Quota & Pressure Simulator with quota gauges, breakdown cards, and real-time stress testing controls.
 
-### Phase 4: Quota Stress Tester & Eviction Simulation
-- Implement `src/quota/stress_tester.ts`:
-  - Query `navigator.storage.estimate()` to calculate remaining bytes.
-  - Provide an interactive slider to allocate synthetic large Blobs into a temporary IndexedDB store until the browser throws a `QuotaExceededError`.
-  - Test and verify application behavior: Does the app notify the user, trigger cleanup, or crash?
-  - Provide 1-click "Release Allocated Space" to instantly clean up synthetic test data.
+### Phase 4: In-Page Drawer Distribution
+- Implement the shadow DOM host in `src/drawer/host.ts`.
+- Bundle `storagelens.js` with zero stylesheet collision for third-party host pages.
+- Expose global keyboard shortcut (`Ctrl+Shift+S`) and window API (`window.__STORAGELENS__`).
 
-### Phase 5: Web Studio, Embed Drawer & Verification Suite
-- Build modern React 19 interface in `web/`:
-  - **IndexedDB Tab**: Virtualized table with column sorting, live search, and inline JSON editing.
-  - **OPFS File Tree Tab**: Folder navigation with binary Hex Viewer and SQLite schema preview.
-  - **CacheStorage Tab**: Grouped HTTP requests with status pills and response header drawer.
-- Support Shadow DOM embedding: Load `storagelens.js` in any app with `window.__STORAGELENS__.open()`.
-
----
-
-## 4. Agent Kickoff Prompt
-
-```markdown
-You are implementing **StorageLens**, a browser client storage and offline database workbench for IndexedDB, OPFS, and ServiceWorker in TypeScript + React 19.
-
-### Execution Plan:
-1. Initialize the project in `B:\workgit\storagelens` with root `package.json`, TypeScript configuration, and dependencies (`vite`, `lucide-react`, `tailwindcss`).
-2. Implement `src/indexeddb/` to reflect browser databases, cursor-paginate object stores, and support full-text search across records.
-3. Implement `src/opfs/` to recursively explore the Origin Private File System sandbox, preview binary files (hex dump), and identify SQLite Wasm databases.
-4. Implement `src/cache/` to inspect `window.caches` (ServiceWorker responses and headers).
-5. Implement `src/quota/` to calculate storage percentages and simulate `QuotaExceededError` under artificial disk pressure.
-6. Build the modern React 19 interface in `web/` featuring the IndexedDB Data Grid, OPFS Tree Viewer, and Quota Gauge.
-7. Build distribution outputs: both an embeddable shadow-DOM drawer (`storagelens.js`) and the standalone web application.
-
-Maintain 100% production code without mocks, placeholders, or empty handlers.
-```
+### Phase 5: Verification, Documentation & Visual Assets
+- Run Vitest test suite and resolve all edge cases.
+- Run typecheck and bundle both web app and drawer library.
+- Author humanized technical documentation in `README.md`.
+- Capture authentic UI screenshots and record animated demo GIF in `docs/images/`.
+- Synchronize portfolio metadata across MTLG systems.
