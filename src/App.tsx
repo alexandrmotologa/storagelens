@@ -45,6 +45,12 @@ export const App: React.FC = () => {
   const [notifications, setNotifications] = useState<ToastNotification[]>([]);
   const [isSeeding, setIsSeeding] = useState(false);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+
+  const handleSelectTab = (tab: StorageTab) => {
+    setActiveTab(tab);
+    setIsMobileSidebarOpen(false);
+  };
 
   const notify = (type: 'success' | 'error' | 'info', message: string) => {
     const id = `${Date.now()}_${Math.random()}`;
@@ -138,12 +144,14 @@ export const App: React.FC = () => {
   // Calculate total cache bytes
   const cacheTotalBytes = cache.buckets.reduce((acc, b) => acc + b.totalBytes, 0);
 
+  const isMobileSidebarAvailable = ['indexeddb', 'opfs', 'cache'].includes(activeTab);
+
   return (
     <div className="flex flex-col h-screen w-screen bg-slate-950 text-slate-100 overflow-hidden font-sans">
       {/* Header bar */}
       <Header
         activeTab={activeTab}
-        onSelectTab={setActiveTab}
+        onSelectTab={handleSelectTab}
         quotaEstimate={quota.estimate}
         onRefreshAll={handleRefreshAll}
         onSeedPlayground={handleSeedPlayground}
@@ -154,6 +162,9 @@ export const App: React.FC = () => {
         cacheCount={cache.buckets.length}
         webStorageCount={webStorage.stats.itemCount}
         locksCount={locks.snapshot.held.length + locks.snapshot.pending.length}
+        isMobileSidebarOpen={isMobileSidebarOpen}
+        onToggleMobileSidebar={() => setIsMobileSidebarOpen((prev) => !prev)}
+        isMobileSidebarAvailable={isMobileSidebarAvailable}
       />
 
       {/* Main Studio Viewport */}
@@ -174,6 +185,8 @@ export const App: React.FC = () => {
                   notify('success', `Database "${idb.selectedDbName}" deleted.`);
                 }
               }}
+              isMobileOpen={isMobileSidebarOpen}
+              onCloseMobile={() => setIsMobileSidebarOpen(false)}
             />
             <RecordGrid
               dbName={idb.selectedDbName}
@@ -242,6 +255,8 @@ export const App: React.FC = () => {
                   notify('success', `Deleted "${path}".`);
                 }
               }}
+              isMobileOpen={isMobileSidebarOpen}
+              onCloseMobile={() => setIsMobileSidebarOpen(false)}
             />
             <FileViewer
               selectedNode={opfs.selectedNode}
@@ -281,6 +296,8 @@ export const App: React.FC = () => {
                   notify('success', `Cache bucket "${name}" deleted.`);
                 }
               }}
+              isMobileOpen={isMobileSidebarOpen}
+              onCloseMobile={() => setIsMobileSidebarOpen(false)}
             />
             <RequestTable
               bucketName={cache.selectedBucketName}

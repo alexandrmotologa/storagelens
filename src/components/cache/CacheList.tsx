@@ -9,6 +9,8 @@ interface CacheListProps {
   onSelectBucket: (name: string) => void;
   onOpenAddModal: () => void;
   onDeleteBucket: (name: string) => void;
+  isMobileOpen?: boolean;
+  onCloseMobile?: () => void;
 }
 
 export const CacheList: React.FC<CacheListProps> = ({
@@ -17,9 +19,23 @@ export const CacheList: React.FC<CacheListProps> = ({
   onSelectBucket,
   onOpenAddModal,
   onDeleteBucket,
+  isMobileOpen = false,
+  onCloseMobile,
 }) => {
   return (
-    <aside className="w-64 border-r border-slate-800 bg-slate-950 flex flex-col h-full shrink-0">
+    <>
+      {/* Mobile Backdrop */}
+      {isMobileOpen && (
+        <div
+          className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-40 md:hidden"
+          onClick={onCloseMobile}
+        />
+      )}
+      <aside
+        className={`fixed inset-y-0 left-0 z-50 w-72 md:w-64 border-r border-slate-800 bg-slate-950 flex flex-col h-full shrink-0 transition-transform duration-200 ease-in-out md:relative md:translate-x-0 ${
+          isMobileOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full md:translate-x-0'
+        }`}
+      >
       <div className="p-3 border-b border-slate-800 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Layers className="w-4 h-4 text-blue-400" />
@@ -53,7 +69,10 @@ export const CacheList: React.FC<CacheListProps> = ({
             return (
               <div
                 key={b.name}
-                onClick={() => onSelectBucket(b.name)}
+                onClick={() => {
+                  onSelectBucket(b.name);
+                  onCloseMobile?.();
+                }}
                 className={`flex items-center justify-between p-2.5 rounded-md text-xs cursor-pointer group transition-colors ${
                   isSelected
                     ? 'bg-blue-600/20 text-blue-300 border border-blue-500/30 font-medium'
@@ -90,5 +109,6 @@ export const CacheList: React.FC<CacheListProps> = ({
         window.caches
       </div>
     </aside>
+    </>
   );
 };

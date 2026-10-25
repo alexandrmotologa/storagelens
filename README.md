@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/images/logo.svg" alt="StorageLens Logo" width="96" height="96" />
+  <img src="docs/images/logo.png?raw=true" alt="StorageLens Logo" width="130" style="border-radius: 24px;" />
 </p>
 
 <h1 align="center">StorageLens</h1>
@@ -107,6 +107,14 @@ It runs as a standalone web application and as an embeddable shadow DOM drawer t
 - Offers quick action shortcuts to run seeds, clear caches, switch tabs, and trigger quota simulations.
 
 ![Command Palette](docs/images/storagelens_command_palette.png)
+
+### 9. Responsive Mobile and Tablet Adaptability
+- Provides adaptive split-pane layouts across desktop monitors, tablet screens, and compact mobile viewports.
+- Implements an off-canvas slide-in navigation drawer on mobile viewports (< 768px) with quick-access backdrop dismissal.
+- Features horizontal touch-scrolling tab selectors and mobile search controls for on-the-go storage diagnostics.
+- Preserves full virtualized grid, SQLite console, and hex dump inspection capabilities on mobile browsers.
+
+![Tablet & Mobile Responsive Adaptability](docs/images/storagelens_tablet.png)
 
 ---
 

@@ -23,6 +23,8 @@ interface OpfsTreeProps {
   onOpenNewFolderModal: (parentPath: string) => void;
   onUploadFile: (parentPath: string, file: File) => void;
   onDeleteNode: (path: string, isDirectory: boolean) => void;
+  isMobileOpen?: boolean;
+  onCloseMobile?: () => void;
 }
 
 export const OpfsTree: React.FC<OpfsTreeProps> = ({
@@ -32,6 +34,8 @@ export const OpfsTree: React.FC<OpfsTreeProps> = ({
   onOpenNewFolderModal,
   onUploadFile,
   onDeleteNode,
+  isMobileOpen = false,
+  onCloseMobile,
 }) => {
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set(['/databases', '/configs', '/logs']));
 
@@ -67,7 +71,10 @@ export const OpfsTree: React.FC<OpfsTreeProps> = ({
     return (
       <div key={node.path} className="select-none">
         <div
-          onClick={() => onSelectNode(node)}
+          onClick={() => {
+            onSelectNode(node);
+            if (!isDir) onCloseMobile?.();
+          }}
           style={{ paddingLeft: `${depth * 14 + 8}px` }}
           className={`flex items-center justify-between py-1.5 pr-2 rounded-md text-xs cursor-pointer group transition-colors ${
             isSelected
@@ -143,7 +150,19 @@ export const OpfsTree: React.FC<OpfsTreeProps> = ({
   };
 
   return (
-    <aside className="w-72 border-r border-slate-800 bg-slate-950 flex flex-col h-full shrink-0">
+    <>
+      {/* Mobile Backdrop */}
+      {isMobileOpen && (
+        <div
+          className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-40 md:hidden"
+          onClick={onCloseMobile}
+        />
+      )}
+      <aside
+        className={`fixed inset-y-0 left-0 z-50 w-72 border-r border-slate-800 bg-slate-950 flex flex-col h-full shrink-0 transition-transform duration-200 ease-in-out md:relative md:translate-x-0 ${
+          isMobileOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full md:translate-x-0'
+        }`}
+      >
       {/* Sidebar Header */}
       <div className="p-3 border-b border-slate-800 flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -189,5 +208,6 @@ export const OpfsTree: React.FC<OpfsTreeProps> = ({
         <span>navigator.storage.getDirectory()</span>
       </div>
     </aside>
+    </>
   );
 };

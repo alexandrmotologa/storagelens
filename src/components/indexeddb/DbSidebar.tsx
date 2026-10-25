@@ -10,6 +10,8 @@ interface DbSidebarProps {
   onSelectStore: (storeName: string) => void;
   onOpenNewDbModal: () => void;
   onDeleteCurrentDb: () => void;
+  isMobileOpen?: boolean;
+  onCloseMobile?: () => void;
 }
 
 export const DbSidebar: React.FC<DbSidebarProps> = ({
@@ -20,9 +22,23 @@ export const DbSidebar: React.FC<DbSidebarProps> = ({
   onSelectStore,
   onOpenNewDbModal,
   onDeleteCurrentDb,
+  isMobileOpen = false,
+  onCloseMobile,
 }) => {
   return (
-    <aside className="w-64 border-r border-slate-800 bg-slate-950 flex flex-col h-full shrink-0">
+    <>
+      {/* Mobile Backdrop */}
+      {isMobileOpen && (
+        <div
+          className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-40 md:hidden"
+          onClick={onCloseMobile}
+        />
+      )}
+      <aside
+        className={`fixed inset-y-0 left-0 z-50 w-72 md:w-64 border-r border-slate-800 bg-slate-950 flex flex-col h-full shrink-0 transition-transform duration-200 ease-in-out md:relative md:translate-x-0 ${
+          isMobileOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full md:translate-x-0'
+        }`}
+      >
       {/* Sidebar Header */}
       <div className="p-3 border-b border-slate-800 flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -84,7 +100,10 @@ export const DbSidebar: React.FC<DbSidebarProps> = ({
                         return (
                           <button
                             key={store.name}
-                            onClick={() => onSelectStore(store.name)}
+                            onClick={() => {
+                              onSelectStore(store.name);
+                              onCloseMobile?.();
+                            }}
                             className={`w-full flex items-center justify-between px-2 py-1 rounded text-xs transition-colors ${
                               isStoreSelected
                                 ? 'bg-blue-600/20 text-blue-300 border border-blue-500/30 font-medium'
@@ -125,5 +144,6 @@ export const DbSidebar: React.FC<DbSidebarProps> = ({
         </div>
       )}
     </aside>
+    </>
   );
 };
